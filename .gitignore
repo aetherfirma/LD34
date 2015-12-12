@@ -58,3 +58,4 @@ target/
 
 # Sketchup
 AutoSave_models.skp
+*.skb
