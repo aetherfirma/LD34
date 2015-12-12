@@ -55,7 +55,25 @@ function main() {
             if (type == tiles.PARK) {
                 tile = Building(buildings.park);
             } else if (type == tiles.ROAD) {
-                tile = roads.cross.clone();
+                var neigh = neighbours(xy),
+                    x = 0, y = 0;
+
+                for (var t = 0; t < neigh.length; t++) {
+                    var nt = neigh[t];
+                    if (nt.x < 0 || nt.x >= size) continue;
+                    if (nt.y < 0 || nt.y >= size) continue;
+
+                    if (nt.x == xy.x && grid[xy_to_n(nt, size)] == tiles.ROAD) x++;
+                    if (nt.y == xy.y && grid[xy_to_n(nt, size)] == tiles.ROAD) y++;
+                }
+
+                if (x != 0 && y != 0) tile = roads.cross.clone();
+                else if (x != 0 && y == 0) {
+                    tile = roads.straight.clone();
+                } else if (x == 0 && y != 0) {
+                    tile = roads.straight.clone();
+                    tile.rotateZ(Math.PI/2);
+                }
             } else if (type == tiles.BUILDING) {
                 tile = Building(choice([buildings.miterTower]));
             }
