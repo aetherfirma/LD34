@@ -33,7 +33,7 @@ function aStar(grid, startXY, endXY, cost, size) {
         var currentN = minIndex(fScore, openSet),
             currentXY = n_to_xy(currentN, size);
         if (currentN == endN) {
-            return reconstructPath(cameFrom, endN);
+            return reconstructPath(cameFrom, endN, size);
         }
 
         removeFrom(openSet, currentN);
@@ -43,11 +43,12 @@ function aStar(grid, startXY, endXY, cost, size) {
         for (var n = 0; n < neighbours_.length; n++) {
             var neighbourXY = neighbours_[n],
                 neighbourN = xy_to_n(neighbourXY, size);
-            if (n.x < 0 || n.y >= size) continue;
-            if (n.y < 0 || n.y >= size) continue;
+            if (neighbourXY.x < 0 || neighbourXY.y >= size) continue;
+            if (neighbourXY.y < 0 || neighbourXY.y >= size) continue;
+            if (!cost.hasOwnProperty(grid[neighbourN])) continue;
             if (closedSet.indexOf(neighbourN) != -1) continue;
 
-            var tentativeGScore = gScore[neighbourN] + 1;
+            var tentativeGScore = gScore[currentN] + grid[neighbourN];
             if (openSet.indexOf(neighbourN) == -1) openSet.push(neighbourN);
             else if (tentativeGScore >= gScore[neighbourN]) continue;
 
@@ -58,10 +59,10 @@ function aStar(grid, startXY, endXY, cost, size) {
     }
 }
 
-function reconstructPath(cameFrom, goal) {
+function reconstructPath(cameFrom, goal, size) {
     var route = [], current = goal;
     while (cameFrom[current] !== undefined) {
-        route.splice(0, 0, current);
+        route.push(n_to_xy(current, size));
         current = cameFrom[current];
     }
     return route;

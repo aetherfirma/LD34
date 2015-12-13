@@ -4,16 +4,10 @@ function main() {
     var renderer, camera, scene,
         buildings = {
             "miterTower": {
-                "base": undefined,
-                "tower": [],
-                "cap": undefined,
-                "minHeight": 1,
-                "maxHeight": 3
+                "models": []
             },
             "park": {
-                "base": undefined,
-                "minHeight": 0,
-                "maxHeight": 0
+                "models": []
             }
         },
         troops = {
@@ -39,18 +33,167 @@ function main() {
             BUILDING: 2
         },
         routingCost = {
-            0: 4,
-            1: 1,
-            2: 100
+            0: 5,
+            1: 1
         },
         cameraLocation = {x: 0, y: 0}, cameraRotation = Math.PI/2, cameraZoom = 5,
-        unit = 1, floor = 0.7,
+        unit = 1,
         leftMouseDown = false, rightMouseDown = false, mouseDownAt,
         mousetAt, mouseLastAt, mouseDelta,
         lastFrame,
         sun,
-        stats;
+        stats,
+        cityMap,
 
+        playerUnits = [],
+        alienUnits = [];
+
+
+    function makeAI(position, obj, decision, routing, speed, health) {
+        var aiObj = obj.clone();
+        aiObj.position.set(position.x - 5, 0, position.y - 5);
+        scene.add(aiObj);
+        return {
+            position: position,
+            object: aiObj,
+            health: health,
+            speed: speed,
+            actions: [],
+            decision: decision,
+            routing: routing,
+            current: undefined,
+            tick: function (delta) {
+                if (this.health <= 0) {
+                    return; // add smoke maybe?
+                }
+
+                if (this.current === undefined) {
+                    if (this.actions.length === 0) {
+                        this.decision(this);
+                    } else {
+                        this.current = this.actions.pop();
+                    }
+                } else {
+                    if (this.current.action === "move") {
+                        if (this.current.route.length === 0) {
+                            this.current = undefined;
+                            return;
+                        }
+                        var v2 = this.current.route[this.current.route.length - 1],
+                            v3 = new THREE.Vector3(v2.x - 5, 0, v2.y - 5),
+                            dist = this.object.position.distanceTo(v3);
+                        if (dist === 0) {
+                            this.current.route.pop();
+                            return;
+                        }
+                        var speed = this.speed / this.routing[cityMap[xy_to_n(this.position, 11)]],
+                            lerp = Math.min(1, (speed * delta / 1000) / dist);
+                        this.object.lookAt(v3);
+                        this.object.position.lerp(v3, lerp);
+                        this.position = new THREE.Vector2(Math.round(this.object.position.x + 5), Math.round(this.object.position.z + 5));
+                    }
+                }
+            }
+        };
+    }
+
+    function makeTransport(position) {
+        return makeAI(
+            position,
+            troops.good.apc,
+            function (self) {
+                var target, route;
+                while (route === undefined) {
+                    target = new THREE.Vector2(randint(0, 10), randint(0, 10));
+                    route = aStar(cityMap, self.position, target, self.routing, 11);
+                }
+                self.actions.splice(0, 0, {
+                    action: "move",
+                    location: target,
+                    route: route
+                })
+            },
+            {
+                1: 1
+            },
+            1,
+            100
+        );
+    }
+
+    function makeTank(position) {
+        return makeAI(
+            position,
+            troops.good.tank,
+            function (self) {
+                var target, route;
+                while (route === undefined) {
+                    target = new THREE.Vector2(randint(0, 10), randint(0, 10));
+                    route = aStar(cityMap, self.position, target, self.routing, 11);
+                }
+                self.actions.splice(0, 0, {
+                    action: "move",
+                    location: target,
+                    route: route
+                })
+            },
+            {
+                1: 1,
+                0: 2
+            },
+            1.25,
+            100
+        );
+    }
+
+    function makeHoverTank(position) {
+        return makeAI(
+            position,
+            troops.bad.hovertank,
+            function (self) {
+                var target, route;
+                while (route === undefined) {
+                    target = new THREE.Vector2(randint(0, 10), randint(0, 10));
+                    route = aStar(cityMap, self.position, target, self.routing, 11);
+                }
+                self.actions.splice(0, 0, {
+                    action: "move",
+                    location: target,
+                    route: route
+                })
+            },
+            {
+                1: 1,
+                0: 4
+            },
+            1,
+            100
+        );
+    }
+
+    function makeVtol(position) {
+        return makeAI(
+            position,
+            troops.bad.vtol,
+            function (self) {
+                var target, route;
+                while (route === undefined) {
+                    target = new THREE.Vector2(randint(0, 10), randint(0, 10));
+                    route = aStar(cityMap, self.position, target, self.routing, 11);
+                }
+                self.actions.splice(0, 0, {
+                    action: "move",
+                    location: target,
+                    route: route
+                })
+            },
+            {
+                0: 1,
+                1: 1
+            },
+            3,
+            100)
+    }
 
     function generateCity(size) {
         var city = new THREE.Object3D(),
@@ -60,7 +203,7 @@ function main() {
         for (n = 0; n < grid.length; n++) {
             xy = n_to_xy(n, size);
             if ((xy.x - 1) % 4 == 0 || (xy.y - 1) % 4 == 0) grid[n] = tiles.ROAD;
-            else grid[n] = choice([tiles.BUILDING, tiles.PARK]);
+            else grid[n] = choice([tiles.BUILDING, tiles.BUILDING, tiles.BUILDING, tiles.PARK, tiles.PARK, tiles.PARK, tiles.PARK]);
         }
 
         for (n = 0; n < grid.length; n ++) {
@@ -68,7 +211,6 @@ function main() {
             type = grid[n];
             if (type == tiles.PARK) {
                 tile = Building(buildings.park);
-                tile.rotateY(Math.PI/2*randint(0, 3))
             } else if (type == tiles.ROAD) {
                 var neigh = neighbours(xy),
                     x = 0, y = 0;
@@ -99,11 +241,24 @@ function main() {
         city.updateMatrix();
         cityobj = city;
 
+        cityMap = grid;
         return city
     }
 
     function render(dt) {
         renderer.render(scene, camera);
+    }
+
+    function runAI(dt) {
+        var u, unit;
+        for (u = 0; u < alienUnits.length; u++) {
+            unit = alienUnits[u];
+            unit.tick(dt);
+        }
+        for (u = 0; u < playerUnits.length; u++) {
+            unit = playerUnits[u];
+            unit.tick(dt);
+        }
     }
 
     function tick() {
@@ -115,6 +270,7 @@ function main() {
         requestAnimationFrame(tick);
 
         positionCamera(dt);
+        runAI(dt);
         render(dt);
 
         lastFrame = now;
@@ -191,27 +347,45 @@ function main() {
             }
         },
         {
-            "path": "models/building1-base.dae",
+            "path": "models/building1-1.dae",
             "callback": function (model) {
-                buildings["miterTower"]["base"] = model
+                buildings["miterTower"]["models"].push(model)
             }
         },
         {
-            "path": "models/building1-tower.dae",
+            "path": "models/building1-2.dae",
             "callback": function (model) {
-                buildings["miterTower"]["tower"].push(model)
+                buildings["miterTower"]["models"].push(model)
             }
         },
         {
-            "path": "models/building1-cap.dae",
+            "path": "models/building1-3.dae",
             "callback": function (model) {
-                buildings["miterTower"]["cap"] = model
+                buildings["miterTower"]["models"].push(model)
+            }
+        },
+        {
+            "path": "models/building1-4.dae",
+            "callback": function (model) {
+                buildings["miterTower"]["models"].push(model)
+            }
+        },
+        {
+            "path": "models/building1-5.dae",
+            "callback": function (model) {
+                buildings["miterTower"]["models"].push(model)
+            }
+        },
+        {
+            "path": "models/building1-6.dae",
+            "callback": function (model) {
+                buildings["miterTower"]["models"].push(model)
             }
         },
         {
             "path": "models/park.dae",
             "callback": function (model) {
-                buildings["park"]["base"] = model
+                buildings["park"]["models"].push(model)
             }
         },
         {
@@ -260,9 +434,8 @@ function main() {
 
     function positionCamera(dt) {
         if (mouseDelta !== undefined && rightMouseDown) {
-            //cameraRotation -= mouseDelta.x / 6 * (dt / 1000);
+            cameraRotation -= mouseDelta.x / 6 * (dt / 1000);
         }
-        cameraRotation -= 3 / 6 * (dt / 1000);
 
         var skew = 1.2 * cameraZoom;
         var new_camera_vector = new THREE.Vector3(-Math.sin(cameraRotation)*-skew, cameraZoom, Math.cos(cameraRotation)*-skew);
@@ -274,23 +447,9 @@ function main() {
 
 
     function Building(building) {
-        var obj = new THREE.Object3D(),
-            height = randint(building.minHeight, building.maxHeight);
-
-        var base = building.base.clone();
-        base.position.set(0, 0, 0);
-        obj.add(base);
-        if (height > 0) {
-            for (var l = 1; l < height; l++) {
-                var body = choice(building.tower).clone();
-                body.position.set(0, floor * l, 0);
-                obj.add(body);
-            }
-            var cap = building.cap.clone();
-            cap.position.set(0, floor * height, 0);
-            obj.add(cap);
-        }
-        return obj;
+        var b = choice(building.models).clone();
+        b.rotateZ(Math.PI/2*randint(0, 3));
+        return b;
     }
 
 
@@ -313,32 +472,26 @@ function main() {
             city.position.set(-5, 0, -5);
             scene.add(city);
         },
-        function () { // Scatter some tanks around
-            var _, n = 25;
-            for (_ = 0; _ < n; _++) {
-                var tank = troops.good.tank.clone();
-                tank.rotateZ(Math.PI*2*Math.random());
-                tank.position.set(10*Math.random()-5, 0, 10*Math.random()-5);
-                scene.add(tank);
-            }
-            for (_ = 0; _ < n; _++) {
-                var apc = troops.good.apc.clone();
-                apc.rotateZ(Math.PI*2*Math.random());
-                apc.position.set(10*Math.random()-5, 0, 10*Math.random()-5);
-                scene.add(apc);
-            }
-            for (_ = 0; _ < n; _++) {
-                var hovertank = troops.bad.hovertank.clone();
-                hovertank.rotateZ(Math.PI*2*Math.random());
-                hovertank.position.set(10*Math.random()-5, 0, 10*Math.random()-5);
-                scene.add(hovertank);
-            }
-            for (_ = 0; _ < n; _++) {
-                var dropship = troops.bad.vtol.clone();
-                dropship.rotateZ(Math.PI*2*Math.random());
-                dropship.position.set(10*Math.random()-5, 0, 10*Math.random()-5);
-                scene.add(dropship);
-            }
+        function () {
+            alienUnits.push(makeHoverTank(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeHoverTank(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeHoverTank(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeHoverTank(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeHoverTank(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeHoverTank(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeVtol(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeVtol(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeVtol(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeVtol(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeTank(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeTank(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeTank(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeTank(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeTank(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeTank(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeTransport(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeTransport(new THREE.Vector2(5, 5)));
+            alienUnits.push(makeTransport(new THREE.Vector2(5, 5)));
         },
         function () { // Add renderer to the dom
             console.log("Starting render surface");
@@ -361,7 +514,8 @@ function main() {
             stats = new Stats();
             stats.domElement.style.position = 'absolute';
             stats.domElement.style.top = '0px';
-            document.body.appendChild( stats.domElement );        },
+            document.body.appendChild( stats.domElement );
+        },
         function () {
             console.log("Starting renderer");
             lastFrame = +new Date;
