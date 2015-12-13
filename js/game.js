@@ -12,12 +12,11 @@ function main() {
         },
         troops = {
             "good": {
-                "soldier": undefined,
                 "apc": undefined,
                 "tank": undefined
             },
             "bad": {
-                "soldier": undefined,
+                "spawner": undefined,
                 "hovertank": undefined,
                 "vtol": undefined
             }
@@ -45,8 +44,7 @@ function main() {
         stats,
         cityMap,
 
-        playerUnits = [],
-        alienUnits = [];
+        units = [];
 
 
     function makeAI(position, obj, decision, routing, speed, health) {
@@ -91,6 +89,10 @@ function main() {
                         this.object.lookAt(v3);
                         this.object.position.lerp(v3, lerp);
                         this.position = new THREE.Vector2(Math.round(this.object.position.x + 5), Math.round(this.object.position.z + 5));
+                    } else if (this.current.action === "spawn") {
+                        var spawn = choice(this.current.thing);
+                        units.push(spawn(this.position));
+                        this.current = undefined;
                     }
                 }
             }
@@ -176,16 +178,43 @@ function main() {
             position,
             troops.bad.vtol,
             function (self) {
-                var target, route;
-                while (route === undefined) {
-                    target = new THREE.Vector2(randint(0, 10), randint(0, 10));
-                    route = aStar(cityMap, self.position, target, self.routing, 11);
+                if (Math.random() < 0.35) {
+                    self.actions.splice(0, 0, {
+                        action: "spawn",
+                        thing: [makeSpawner]
+                    })
+                } else {
+                    var target, route;
+                    while (route === undefined) {
+                        target = new THREE.Vector2(randint(0, 10), randint(0, 10));
+                        route = aStar(cityMap, self.position, target, self.routing, 11);
+                    }
+                    self.actions.splice(0, 0, {
+                        action: "move",
+                        location: target,
+                        route: route
+                    })
                 }
-                self.actions.splice(0, 0, {
-                    action: "move",
-                    location: target,
-                    route: route
-                })
+            },
+            {
+                0: 1,
+                1: 1
+            },
+            3,
+            100)
+    }
+
+    function makeSpawner(position) {
+        return makeAI(
+            position,
+            troops.bad.spawner,
+            function (self) {
+                if (Math.random() < 0.005) {
+                    self.actions.splice(0, 0, {
+                        action: "spawn",
+                        thing: [makeHoverTank, makeHoverTank, makeHoverTank, makeVtol]
+                    })
+                }
             },
             {
                 0: 1,
@@ -251,12 +280,8 @@ function main() {
 
     function runAI(dt) {
         var u, unit;
-        for (u = 0; u < alienUnits.length; u++) {
-            unit = alienUnits[u];
-            unit.tick(dt);
-        }
-        for (u = 0; u < playerUnits.length; u++) {
-            unit = playerUnits[u];
+        for (u = 0; u < units.length; u++) {
+            unit = units[u];
             unit.tick(dt);
         }
     }
@@ -429,6 +454,12 @@ function main() {
             "callback": function (model) {
                 troops.bad.vtol = model;
             }
+        },
+        {
+            "path": "models/badspawner.dae",
+            "callback": function (model) {
+                troops.bad.spawner = model;
+            }
         }
     ];
 
@@ -473,25 +504,16 @@ function main() {
             scene.add(city);
         },
         function () {
-            alienUnits.push(makeHoverTank(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeHoverTank(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeHoverTank(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeHoverTank(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeHoverTank(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeHoverTank(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeVtol(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeVtol(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeVtol(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeVtol(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeTank(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeTank(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeTank(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeTank(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeTank(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeTank(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeTransport(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeTransport(new THREE.Vector2(5, 5)));
-            alienUnits.push(makeTransport(new THREE.Vector2(5, 5)));
+            units.push(makeVtol(new THREE.Vector2(5, 5)));
+            units.push(makeTank(new THREE.Vector2(5, 5)));
+            units.push(makeTank(new THREE.Vector2(5, 5)));
+            units.push(makeTank(new THREE.Vector2(5, 5)));
+            units.push(makeTank(new THREE.Vector2(5, 5)));
+            units.push(makeTank(new THREE.Vector2(5, 5)));
+            units.push(makeTank(new THREE.Vector2(5, 5)));
+            units.push(makeTransport(new THREE.Vector2(5, 5)));
+            units.push(makeTransport(new THREE.Vector2(5, 5)));
+            units.push(makeTransport(new THREE.Vector2(5, 5)));
         },
         function () { // Add renderer to the dom
             console.log("Starting render surface");
