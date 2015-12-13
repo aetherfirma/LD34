@@ -1,3 +1,5 @@
+var cityobj;
+
 function main() {
     var renderer, camera, scene,
         buildings = {
@@ -6,7 +8,7 @@ function main() {
                 "tower": [],
                 "cap": undefined,
                 "minHeight": 1,
-                "maxHeight": 6
+                "maxHeight": 3
             },
             "park": {
                 "base": undefined,
@@ -14,7 +16,18 @@ function main() {
                 "maxHeight": 0
             }
         },
-        troops = {},
+        troops = {
+            "good": {
+                "soldier": undefined,
+                "apc": undefined,
+                "tank": undefined
+            },
+            "bad": {
+                "soldier": undefined,
+                "hovertank": undefined,
+                "vtol": undefined
+            }
+        },
         roads = {
             "straight": undefined,
             "corner": undefined,
@@ -31,11 +44,12 @@ function main() {
             2: 100
         },
         cameraLocation = {x: 0, y: 0}, cameraRotation = Math.PI/2, cameraZoom = 5,
-        unit = 1, floor = 0.35,
+        unit = 1, floor = 0.7,
         leftMouseDown = false, rightMouseDown = false, mouseDownAt,
         mousetAt, mouseLastAt, mouseDelta,
         lastFrame,
-        sun;
+        sun,
+        stats;
 
 
     function generateCity(size) {
@@ -46,7 +60,7 @@ function main() {
         for (n = 0; n < grid.length; n++) {
             xy = n_to_xy(n, size);
             if ((xy.x - 1) % 4 == 0 || (xy.y - 1) % 4 == 0) grid[n] = tiles.ROAD;
-            else grid[n] = choice([tiles.BUILDING, tiles.BUILDING, tiles.PARK]);
+            else grid[n] = choice([tiles.BUILDING, tiles.PARK]);
         }
 
         for (n = 0; n < grid.length; n ++) {
@@ -54,6 +68,7 @@ function main() {
             type = grid[n];
             if (type == tiles.PARK) {
                 tile = Building(buildings.park);
+                tile.rotateY(Math.PI/2*randint(0, 3))
             } else if (type == tiles.ROAD) {
                 var neigh = neighbours(xy),
                     x = 0, y = 0;
@@ -81,6 +96,9 @@ function main() {
             city.add(tile);
         }
 
+        city.updateMatrix();
+        cityobj = city;
+
         return city
     }
 
@@ -100,7 +118,9 @@ function main() {
         render(dt);
 
         lastFrame = now;
-        mouseLastAt = mousetAt;    }
+        mouseLastAt = mousetAt;
+        stats.update();
+    }
 
     function mouse_move_handler(evt) {
         mousetAt = {x: evt.pageX, y: evt.pageY};
@@ -211,13 +231,38 @@ function main() {
             "callback": function (model) {
                 roads.corner = model
             }
+        },
+        {
+            "path": "models/goodtank.dae",
+            "callback": function (model) {
+                troops.good.tank = model;
+            }
+        },
+        {
+            "path": "models/goodapc.dae",
+            "callback": function (model) {
+                troops.good.apc = model;
+            }
+        },
+        {
+            "path": "models/badtank.dae",
+            "callback": function (model) {
+                troops.bad.hovertank = model;
+            }
+        },
+        {
+            "path": "models/baddropship.dae",
+            "callback": function (model) {
+                troops.bad.vtol = model;
+            }
         }
     ];
 
     function positionCamera(dt) {
         if (mouseDelta !== undefined && rightMouseDown) {
-            cameraRotation -= mouseDelta.x / 6 * (dt / 1000);
+            //cameraRotation -= mouseDelta.x / 6 * (dt / 1000);
         }
+        cameraRotation -= 3 / 6 * (dt / 1000);
 
         var skew = 1.2 * cameraZoom;
         var new_camera_vector = new THREE.Vector3(-Math.sin(cameraRotation)*-skew, cameraZoom, Math.cos(cameraRotation)*-skew);
@@ -253,7 +298,7 @@ function main() {
         function () { // Initialise renderer
             console.log("Starting three.js");
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 1, 1000);
+            camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.01, 1000);
             scene.add(new THREE.AmbientLight(0x333333));
 
             sun = new THREE.DirectionalLight(0xffffff, 1);
@@ -267,6 +312,33 @@ function main() {
             var city = generateCity(11);
             city.position.set(-5, 0, -5);
             scene.add(city);
+        },
+        function () { // Scatter some tanks around
+            var _, n = 25;
+            for (_ = 0; _ < n; _++) {
+                var tank = troops.good.tank.clone();
+                tank.rotateZ(Math.PI*2*Math.random());
+                tank.position.set(10*Math.random()-5, 0, 10*Math.random()-5);
+                scene.add(tank);
+            }
+            for (_ = 0; _ < n; _++) {
+                var apc = troops.good.apc.clone();
+                apc.rotateZ(Math.PI*2*Math.random());
+                apc.position.set(10*Math.random()-5, 0, 10*Math.random()-5);
+                scene.add(apc);
+            }
+            for (_ = 0; _ < n; _++) {
+                var hovertank = troops.bad.hovertank.clone();
+                hovertank.rotateZ(Math.PI*2*Math.random());
+                hovertank.position.set(10*Math.random()-5, 0, 10*Math.random()-5);
+                scene.add(hovertank);
+            }
+            for (_ = 0; _ < n; _++) {
+                var dropship = troops.bad.vtol.clone();
+                dropship.rotateZ(Math.PI*2*Math.random());
+                dropship.position.set(10*Math.random()-5, 0, 10*Math.random()-5);
+                scene.add(dropship);
+            }
         },
         function () { // Add renderer to the dom
             console.log("Starting render surface");
@@ -285,6 +357,11 @@ function main() {
                 renderer.setSize(innerWidth, innerHeight);
             });
         },
+        function () {
+            stats = new Stats();
+            stats.domElement.style.position = 'absolute';
+            stats.domElement.style.top = '0px';
+            document.body.appendChild( stats.domElement );        },
         function () {
             console.log("Starting renderer");
             lastFrame = +new Date;

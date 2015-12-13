@@ -13,23 +13,23 @@
         canvas {
             z-index: 10;
         }
+
+        #info {
+            position: absolute;
+            top: 0;
+            width: 100%;
+            padding: 5px;
+            z-index: 100;
+        }
     </style>
 </head>
 <body>
     <!-- Dependencies -->
     <script src="js-ext/three.min.js"></script>
+    <script src="http://threejs.org/examples/js/libs/stats.min.js"></script>
     <script src="js-ext/ColladaLoader.js"></script>
     <script src="js-ext/jquery-1.10.2.min.js"></script>
     <script src="js-ext/perlin.js"></script>
-
-    <!-- Shader bullshit -->
-    <script src="http://mrdoob.github.com/three.js/examples/js/shaders/CopyShader.js"></script>
-    <script src="http://mrdoob.github.com/three.js/examples/js/shaders/SSAOShader.js"></script>
-
-    <script src="http://mrdoob.github.com/three.js/examples/js/postprocessing/EffectComposer.js"></script>
-    <script src="http://mrdoob.github.com/three.js/examples/js/postprocessing/RenderPass.js"></script>
-    <script src="http://mrdoob.github.com/three.js/examples/js/postprocessing/MaskPass.js"></script>
-    <script src="http://mrdoob.github.com/three.js/examples/js/postprocessing/ShaderPass.js"></script>
 
     <!-- Internal code -->
     <script src="js/routing.js"></script>
